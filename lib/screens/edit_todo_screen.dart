@@ -1,16 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:solid_todo/models/edit_todo_model.dart';
 import 'package:provider/provider.dart';
+import 'package:solid_todo/models/main_screen_model.dart';
 import '../assets/colors.dart';
+import '../sql/todo.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class EditToDoScreen extends StatefulWidget {
-  const EditToDoScreen({Key? key}) : super(key: key);
+  EditToDoScreen({Key? key, required this.todo, required this.flag})
+      : super(key: key);
+  final ToDo todo;
+  final bool flag;
 
   @override
   State<EditToDoScreen> createState() => _EditToDoScreenState();
 }
 
 class _EditToDoScreenState extends State<EditToDoScreen> {
+  @override
+  void initState() {
+    // TODO: implement initState
+    EditToDoModel().todoLocalSet = widget.todo;
+    super.initState();
+
+    /*
+    Future.delayed(Duration.zero, () {
+      Provider.of<EditToDoModel>(context).todoLocalSet = widget.todo;
+    });*/
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -19,29 +37,38 @@ class _EditToDoScreenState extends State<EditToDoScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {Navigator.pushReplacementNamed(context, '/');},
+          onPressed: () {
+            Navigator.pushReplacementNamed(context, '/');
+          },
         ),
-        title: const Text(
-          "ToDo Name",
-          style: TextStyle(fontSize: 21),
+        title: Text(
+          widget.todo.name!,
+          style: const TextStyle(fontSize: 21),
         ),
         actions: [
           IconButton(
               onPressed: () {
+                if (widget.flag == true) {
+                  EditToDoModel().updateToDataBase(context);
+                } else {
+                  EditToDoModel().saveToDataBase(context);
+                }
               },
               icon: const Icon(Icons.check)),
         ],
       ),
-      body: Container(
-        color: darkBlue,
-        child:
-            Consumer<EditToDoModel>(builder: (context, editToDoModel, child) {
-          return ListView.builder(
-              itemCount: 3,
+      body: Consumer<EditToDoModel>(builder: (context, editToDoModel, child) {
+        return Container(
+          color: darkBlue,
+          child: ListView.builder(
+              itemCount: editToDoModel.todoLocalGet.tasks.length,
               itemBuilder: (context, index) {
                 return Dismissible(
-                  key: const ValueKey<int>(3),
-                  onDismissed: (DismissDirection direction) {},
+                  key: ValueKey<int>(editToDoModel.todoLocalGet.tasks.length),
+                  onDismissed: (DismissDirection direction) {
+                    Provider.of<EditToDoModel>(context, listen: false)
+                        .deleteTask(index);
+                  },
                   child: Container(
                     margin: const EdgeInsets.only(
                         top: 10, right: 5, left: 5, bottom: 0),
@@ -56,19 +83,23 @@ class _EditToDoScreenState extends State<EditToDoScreen> {
                     child: ListTile(
                       //Change Text
                       title: Text(
-                        "ListPart:${index}",
+                        editToDoModel.todoLocalGet.tasks[index].toString(),
                         style: TextStyle(color: lightMarine),
                       ),
                       trailing: Checkbox(
-                        value: true,
-                        onChanged: (bool? value) {},
+                        focusColor: Colors.white,
+                        value: editToDoModel.todoLocalGet.completed![index],
+                        onChanged: (bool? value) {
+                          editToDoModel.changedChecked(index);
+                          //Provider.of<EditToDoModel>(context, listen: false).changedChecked(index);
+                        },
                       ),
                     ),
                   ),
                 );
-              });
-        }),
-      ),
+              }),
+        );
+      }),
       floatingActionButton: FloatingActionButton(
         backgroundColor: lightBlue,
         child: Icon(
@@ -76,13 +107,15 @@ class _EditToDoScreenState extends State<EditToDoScreen> {
           color: darkBlue,
         ),
         onPressed: () {
+          TextEditingController addTask = TextEditingController();
           showDialog(
               context: context,
               builder: (BuildContext context) {
                 return AlertDialog(
                   title: const Text('Enter Task'),
-                  content: const TextField(
-                    decoration: InputDecoration(
+                  content: TextField(
+                    controller: addTask,
+                    decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       labelText: 'ToDo Name',
                     ),
@@ -93,7 +126,20 @@ class _EditToDoScreenState extends State<EditToDoScreen> {
                       child: const Text('Cancel'),
                     ),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        if (addTask.text.isNotEmpty) {
+                          Provider.of<EditToDoModel>(context, listen: false)
+                              .add(addTask.text);
+                          addTask.text = '';
+
+                          Navigator.pop(context, 'Cancel');
+                        } else {
+                          Fluttertoast.showToast(
+                            msg: "Please Add Task",
+                            toastLength: Toast.LENGTH_SHORT,
+                          );
+                        }
+                      },
                       child: const Text('OK'),
                     ),
                   ],
